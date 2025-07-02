@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px 0;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            color: #495057;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #6c757d;
+            font-size: 1.1rem;
+        }
+
+        .chat-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .messages {
+            height: 500px;
+            overflow-y: auto;
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 6px;
+        }
+
+        .message.user {
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+        }
+
+        .message.assistant {
+            background-color: #ffffff;
+            border-left: 4px solid #28a745;
+            border: 1px solid #e9ecef;
+        }
+
+        .message.system {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            font-style: italic;
+        }
+
+        .message.reasoning {
+            background-color: #fff8e1;
+            border-left: 4px solid #ff9800;
+            font-style: italic;
+        }
+
+        .message-header {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .message.user .message-header {
+            color: #007bff;
+        }
+
+        .message.assistant .message-header {
+            color: #28a745;
+        }
+
+        .message.system .message-header {
+            color: #856404;
+        }
+
+        .message.reasoning .message-header {
+            color: #f57c00;
+        }
+
+        .message-content {
+            white-space: pre-wrap;
+            font-size: 1rem;
+        }
+
+        .thinking-indicator {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            margin-bottom: 15px;
+            border-radius: 6px;
+        }
+
+        .thinking-indicator.active {
+            display: flex;
+        }
+
+        .thinking-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .thinking-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #2196f3;
+            border-radius: 50%;
+            animation: thinking 1.4s infinite ease-in-out;
+        }
+
+        .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+        .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes thinking {
+            0%, 80%, 100% {
+                transform: scale(0);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .input-container {
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-field {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .input-field:focus {
+            border-color: #007bff;
+        }
+
+        .send-button {
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            min-width: 100px;
+        }
+
+        .send-button:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+
+        .send-button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .tool-info {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f1f3f4;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            border-left: 3px solid #6c757d;
+        }
+
+        .tool-call {
+            color: #d73527;
+            font-weight: 500;
+        }
+
+        .tool-result {
+            color: #137333;
+            font-weight: 500;
+        }
+
+        .status-bar {
+            padding: 10px 20px;
+            background-color: #e9ecef;
+            font-size: 0.9rem;
+            color: #6c757d;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .typing-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1.2em;
+            background-color: #333;
+            animation: blink 1s infinite;
+            margin-left: 2px;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .timestamp {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        /* Typing animation styles */
+        .typing-text {
+            position: relative;
+        }
+
+        .typing-entry {
+            animation: typingGlow 2s infinite ease-in-out;
+        }
+
+        @keyframes typingGlow {
+            0%, 100% {
+                background-color: #f0f9ff;
+                box-shadow: 0 0 5px rgba(33, 150, 243, 0.3);
+            }
+            50% {
+                background-color: #e0f2fe;
+                box-shadow: 0 0 15px rgba(33, 150, 243, 0.6);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>RAG Assistant</h1>
+            <p>Ask questions about your documents and get intelligent responses</p>
+        </div>
+
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="message system">
+                    <div class="message-header">System</div>
+                    <div class="message-content">RAG Assistant is ready. You can ask questions about your documents.</div>
+                    <div class="timestamp" id="init-time"></div>
+                </div>
+            </div>
+
+            <div class="thinking-indicator" id="thinking">
+                <span>Agent is thinking</span>
+                <div class="thinking-dots">
+                    <div class="thinking-dot"></div>
+                    <div class="thinking-dot"></div>
+                    <div class="thinking-dot"></div>
+                </div>
+                <span id="thinking-status">Processing...</span>
+            </div>
+
+            <div class="input-container">
+                <div class="input-group">
+                    <input
+                        type="text"
+                        class="input-field"
+                        id="userInput"
+                        placeholder="Ask a question about your documents..."
+                        onkeypress="handleKeyPress(event)"
+                    >
+                    <button class="send-button" id="sendButton" onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+
+            <div class="status-bar" id="statusBar">
+                Ready to assist you
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize timestamp
+        document.getElementById('init-time').textContent = new Date().toLocaleTimeString();
+
+        let isProcessing = false;
+        let currentResponse = {
+            text: '',
+            isTyping: false,
+            entryElement: null,
+            contentElement: null
+        };
+
+        const messages = document.getElementById('messages');
+        const userInput = document.getElementById('userInput');
+        const sendButton = document.getElementById('sendButton');
+        const thinking = document.getElementById('thinking');
+        const thinkingStatus = document.getElementById('thinking-status');
+        const statusBar = document.getElementById('statusBar');
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !isProcessing) {
+                sendMessage();
+            }
+        }
+
+        function addMessage(type, content, timestamp = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'message-header';
+            headerDiv.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+
+            messageDiv.appendChild(headerDiv);
+            messageDiv.appendChild(contentDiv);
+
+
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+
+            return { messageDiv, contentDiv };
+        }
+
+        function showThinking(status = "Processing...") {
+            thinking.classList.add('active');
+            thinkingStatus.textContent = status;
+        }
+
+        function hideThinking() {
+            thinking.classList.remove('active');
+        }
+
+        function updateStatus(status) {
+            statusBar.textContent = status;
+        }
+
+        function startTypingAnimation() {
+            if (currentResponse.isTyping || !currentResponse.contentElement) return;
+
+            currentResponse.isTyping = true;
+            currentResponse.entryElement.classList.add('typing-entry');
+
+            let displayedText = '';
+            let currentIndex = 0;
+
+            function typeNextCharacter() {
+                if (currentIndex < currentResponse.text.length) {
+                    displayedText += currentResponse.text[currentIndex];
+                    currentResponse.contentElement.innerHTML = displayedText + '<span class="typing-cursor">|</span>';
+                    currentIndex++;
+
+                    // Variable typing speed
+                    let delay = 30;
+                    const char = currentResponse.text[currentIndex - 1];
+                    if (char === ' ') delay = 15;
+                    else if (char === '.' || char === '!' || char === '?') delay = 100;
+                    else if (char === ',') delay = 50;
+
+                    setTimeout(typeNextCharacter, delay);
+                } else {
+                    // Check if more text has been added while typing
+                    if (currentIndex < currentResponse.text.length) {
+                        setTimeout(typeNextCharacter, 30);
+                    } else {
+                        // Typing caught up
+                        currentResponse.isTyping = false;
+                        currentResponse.contentElement.innerHTML = displayedText;
+                        currentResponse.entryElement.classList.remove('typing-entry');
+                    }
+                }
+            }
+
+            typeNextCharacter();
+        }
+
+        async function sendMessage() {
+            const query = userInput.value.trim();
+            if (!query || isProcessing) return;
+
+            isProcessing = true;
+            sendButton.disabled = true;
+            sendButton.textContent = 'Sending...';
+
+
+            addMessage('user', query);
+            userInput.value = '';
+
+            currentResponse = {
+                text: '',
+                isTyping: false,
+                entryElement: null,
+                contentElement: null
+            };
+
+            showThinking("Processing your question...");
+            updateStatus("Connecting to agent...");
+
+            try {
+                const response = await fetch('/agent/stream/realtime', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `query=${encodeURIComponent(query)}`
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                function readStream() {
+                    return reader.read().then(({ done, value }) => {
+                        if (done) {
+                            hideThinking();
+                            isProcessing = false;
+                            sendButton.disabled = false;
+                            sendButton.textContent = 'Send';
+                            updateStatus("Ready to assist you");
+                            return;
+                        }
+
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+
+                        lines.forEach(line => {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.substring(6));
+                                    handleStreamData(data);
+                                } catch (e) {
+                                    console.error('Error parsing chunk:', e, line);
+                                }
+                            }
+                        });
+
+                        return readStream();
+                    });
+                }
+
+                return readStream();
+
+            } catch (error) {
+                hideThinking();
+                console.error('Error:', error);
+                addMessage('system', `Error: ${error.message}`);
+                updateStatus("Error occurred - Ready to try again");
+
+                isProcessing = false;
+                sendButton.disabled = false;
+                sendButton.textContent = 'Send';
+            }
+        }
+
+        function handleStreamData(data) {
+            if (data.type === 'start') {
+                showThinking("Agent starting...");
+                updateStatus("Agent is processing your query");
+
+            } else if (data.type === 'reasoning') {
+                showThinking(data.content);
+                let list_message = messages.children
+                let last_child = list_message[list_message.length -1]
+                if(last_child.className === 'message reasoning'){
+                    if(last_child.children[1].innerHTML === 'Thinking ....'){
+                        return 
+                    }
+                }
+                addMessage('reasoning', data.content, new Date(data.timestamp * 1000).toLocaleTimeString());
+
+            } else if (data.type === 'tool_call') {
+                showThinking("Using tools...");
+                updateStatus("Agent is using tools");
+
+                const { messageDiv } = addMessage('system', data.content, new Date(data.timestamp * 1000).toLocaleTimeString());
+                const toolDiv = document.createElement('div');
+                toolDiv.className = 'tool-info';
+                toolDiv.innerHTML = `<div class="tool-call">🔧 ${data.content}</div>`;
+                messageDiv.appendChild(toolDiv);
+
+            } else if (data.type === 'thinking' && data.content && data.content.trim()) {
+                hideThinking();
+                updateStatus("Agent is responding...");
+
+
+                currentResponse.text += data.content;
+
+                if (!currentResponse.entryElement) {
+                    const { messageDiv, contentDiv } = addMessage('assistant', '', new Date(data.timestamp * 1000).toLocaleTimeString());
+                    currentResponse.entryElement = messageDiv;
+                    currentResponse.contentElement = contentDiv;
+                }
+                currentResponse.contentElement.textContent = currentResponse.text
+
+            } else if (data.type === 'final') {
+                hideThinking();
+                updateStatus("Response completed");
+
+                // Ensure typing is finished
+                if (currentResponse.contentElement && currentResponse.text) {
+                    currentResponse.contentElement.textContent = currentResponse.text;
+                    currentResponse.entryElement.classList.remove('typing-entry');
+                }
+
+            } else if (data.type === 'error') {
+                hideThinking();
+                addMessage('system', `Error: ${data.content}`);
+                updateStatus("Error occurred");
+            }
+
+            // Auto-scroll
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // Auto-focus input field
+        userInput.focus();
+    </script>
+</body>
+</html>

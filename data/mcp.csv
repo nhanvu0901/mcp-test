@@ -1,0 +1,9 @@
+Component,Description,Library
+MCP Server,Core component managing services and event routing,"@langchain/mcp-adapters, fastmcp"
+Service Adapter,Connects external services to MCP protocol,"@langchain/mcp-adapters"
+Event Handler,Processes messages and triggers workflows,"fastmcp, custom logic"
+Client API,Allows frontend/backend apps to send/receive events,"fastmcp, WebSocket/HTTP"
+Persistence Layer,Stores state or logs from interactions,"fastmcp, Redis/MongoDB"
+Scheduler,Triggers services at scheduled intervals,"fastmcp.scheduler"
+Monitoring Tool,Observes MCP traffic and system health,"custom, Prometheus, Grafana"
+Security Module,Manages authentication and permissions,"custom, OAuth2/JWT integration"
