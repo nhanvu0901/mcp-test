@@ -47,7 +47,7 @@
         .chat-container {
             background: white;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             overflow: hidden;
         }
 
@@ -84,6 +84,12 @@
         .message.reasoning {
             background-color: #fff8e1;
             border-left: 4px solid #ff9800;
+            font-style: italic;
+        }
+
+        .message.memory {
+            background-color: #e8f5e8;
+            border-left: 4px solid #4caf50;
             font-style: italic;
         }
 
@@ -144,8 +150,13 @@
             animation: thinking 1.4s infinite ease-in-out;
         }
 
-        .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
-        .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+        .thinking-dot:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .thinking-dot:nth-child(2) {
+            animation-delay: -0.16s;
+        }
 
         @keyframes thinking {
             0%, 80%, 100% {
@@ -218,42 +229,11 @@
             font-weight: 500;
         }
 
-        .tool-result {
-            color: #137333;
-            font-weight: 500;
-        }
-
-        .status-bar {
-            padding: 10px 20px;
-            background-color: #e9ecef;
-            font-size: 0.9rem;
-            color: #6c757d;
-            border-top: 1px solid #dee2e6;
-        }
-
-        .typing-cursor {
-            display: inline-block;
-            width: 2px;
-            height: 1.2em;
-            background-color: #333;
-            animation: blink 1s infinite;
-            margin-left: 2px;
-        }
-
-        @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0; }
-        }
-
-        .timestamp {
-            font-size: 0.8rem;
-            color: #6c757d;
-            margin-top: 5px;
-        }
-
-        /* Typing animation styles */
-        .typing-text {
-            position: relative;
+        .session-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
         }
 
         .typing-entry {
@@ -273,292 +253,231 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>RAG Assistant</h1>
-            <p>Ask questions about your documents and get intelligent responses</p>
+<div class="container">
+    <div class="header">
+        <h1>RAG Assistant</h1>
+        <p>Ask questions about your documents and get intelligent responses</p>
+    </div>
+    <div class="session-info">
+        <strong>Session ID:</strong> <span id="sessionId">default</span>
+        <button onclick="newSession()">New Session</button>
+    </div>
+    <div class="chat-container">
+        <div class="messages" id="messages">
+            <div class="message system">
+                <div class="message-header">System</div>
+                <div class="message-content">RAG Assistant is ready. You can ask questions about your documents.</div>
+            </div>
         </div>
 
-        <div class="chat-container">
-            <div class="messages" id="messages">
-                <div class="message system">
-                    <div class="message-header">System</div>
-                    <div class="message-content">RAG Assistant is ready. You can ask questions about your documents.</div>
-                    <div class="timestamp" id="init-time"></div>
-                </div>
+        <div class="thinking-indicator" id="thinking">
+            <span>Agent is thinking</span>
+            <div class="thinking-dots">
+                <div class="thinking-dot"></div>
+                <div class="thinking-dot"></div>
+                <div class="thinking-dot"></div>
             </div>
+            <span id="thinking-status">Processing...</span>
+        </div>
 
-            <div class="thinking-indicator" id="thinking">
-                <span>Agent is thinking</span>
-                <div class="thinking-dots">
-                    <div class="thinking-dot"></div>
-                    <div class="thinking-dot"></div>
-                    <div class="thinking-dot"></div>
-                </div>
-                <span id="thinking-status">Processing...</span>
-            </div>
-
-            <div class="input-container">
-                <div class="input-group">
-                    <input
+        <div class="input-container">
+            <div class="input-group">
+                <input
                         type="text"
                         class="input-field"
                         id="userInput"
                         placeholder="Ask a question about your documents..."
                         onkeypress="handleKeyPress(event)"
-                    >
-                    <button class="send-button" id="sendButton" onclick="sendMessage()">Send</button>
-                </div>
-            </div>
-
-            <div class="status-bar" id="statusBar">
-                Ready to assist you
+                >
+                <button class="send-button" id="sendButton" onclick="sendMessage()">Send</button>
             </div>
         </div>
+
     </div>
+</div>
 
-    <script>
-        // Initialize timestamp
-        document.getElementById('init-time').textContent = new Date().toLocaleTimeString();
+<script>
+    let currentSessionId = 'default';
+    let isStreaming = false;
+    let currentResponse = {
+        text: '',
+        isTyping: false,
+        entryElement: null,
+        contentElement: null
+    };
 
-        let isProcessing = false;
-        let currentResponse = {
+    const messages = document.getElementById('messages');
+    const userInput = document.getElementById('userInput');
+    const sendButton = document.getElementById('sendButton');
+    const thinking = document.getElementById('thinking');
+    const thinkingStatus = document.getElementById('thinking-status');
+
+    function newSession() {
+        currentSessionId = 'session_' + Date.now();
+        document.getElementById('sessionId').textContent = currentSessionId;
+        document.getElementById('messages').innerHTML = '<div class="message memory">💡 New session started! Previous memories may be referenced.</div>';
+    }
+
+    newSession()
+
+    function handleKeyPress(event) {
+        if (event.key === 'Enter' && !isStreaming) {
+            sendMessage();
+        }
+    }
+
+    function addMessage(type, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}`;
+
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'message-header';
+        headerDiv.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        contentDiv.textContent = content;
+
+        messageDiv.appendChild(headerDiv);
+        messageDiv.appendChild(contentDiv);
+
+        messages.appendChild(messageDiv);
+        messages.scrollTop = messages.scrollHeight;
+
+        return {messageDiv, contentDiv};
+    }
+
+    function showThinking(status = "Processing...") {
+        thinking.classList.add('active');
+        thinkingStatus.textContent = status;
+    }
+
+    function hideThinking() {
+        thinking.classList.remove('active');
+    }
+
+    async function sendMessage() {
+        const message = userInput.value.trim();
+
+        if (!message || isStreaming) return;
+
+        isStreaming = true;
+        userInput.disabled = true;
+        sendButton.disabled = true;
+        sendButton.textContent = 'Streaming...';
+
+        userInput.value = '';
+        addMessage('user', message);
+
+        currentResponse = {
             text: '',
             isTyping: false,
             entryElement: null,
             contentElement: null
         };
 
-        const messages = document.getElementById('messages');
-        const userInput = document.getElementById('userInput');
-        const sendButton = document.getElementById('sendButton');
-        const thinking = document.getElementById('thinking');
-        const thinkingStatus = document.getElementById('thinking-status');
-        const statusBar = document.getElementById('statusBar');
+        try {
+            const formData = new FormData();
+            formData.append('message', message);
 
-        function handleKeyPress(event) {
-            if (event.key === 'Enter' && !isProcessing) {
-                sendMessage();
-            }
-        }
+            const response = await fetch(`/chat/${currentSessionId}/stream`, {
+                method: 'POST',
+                body: formData
+            });
 
-        function addMessage(type, content, timestamp = null) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}`;
-
-            const headerDiv = document.createElement('div');
-            headerDiv.className = 'message-header';
-            headerDiv.textContent = type.charAt(0).toUpperCase() + type.slice(1);
-
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
-            contentDiv.textContent = content;
-
-            messageDiv.appendChild(headerDiv);
-            messageDiv.appendChild(contentDiv);
-
-
-            messages.appendChild(messageDiv);
-            messages.scrollTop = messages.scrollHeight;
-
-            return { messageDiv, contentDiv };
-        }
-
-        function showThinking(status = "Processing...") {
-            thinking.classList.add('active');
-            thinkingStatus.textContent = status;
-        }
-
-        function hideThinking() {
-            thinking.classList.remove('active');
-        }
-
-        function updateStatus(status) {
-            statusBar.textContent = status;
-        }
-
-        function startTypingAnimation() {
-            if (currentResponse.isTyping || !currentResponse.contentElement) return;
-
-            currentResponse.isTyping = true;
-            currentResponse.entryElement.classList.add('typing-entry');
-
-            let displayedText = '';
-            let currentIndex = 0;
-
-            function typeNextCharacter() {
-                if (currentIndex < currentResponse.text.length) {
-                    displayedText += currentResponse.text[currentIndex];
-                    currentResponse.contentElement.innerHTML = displayedText + '<span class="typing-cursor">|</span>';
-                    currentIndex++;
-
-                    // Variable typing speed
-                    let delay = 30;
-                    const char = currentResponse.text[currentIndex - 1];
-                    if (char === ' ') delay = 15;
-                    else if (char === '.' || char === '!' || char === '?') delay = 100;
-                    else if (char === ',') delay = 50;
-
-                    setTimeout(typeNextCharacter, delay);
-                } else {
-                    // Check if more text has been added while typing
-                    if (currentIndex < currentResponse.text.length) {
-                        setTimeout(typeNextCharacter, 30);
-                    } else {
-                        // Typing caught up
-                        currentResponse.isTyping = false;
-                        currentResponse.contentElement.innerHTML = displayedText;
-                        currentResponse.entryElement.classList.remove('typing-entry');
-                    }
-                }
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            typeNextCharacter();
-        }
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
 
-        async function sendMessage() {
-            const query = userInput.value.trim();
-            if (!query || isProcessing) return;
+            while (true) {
+                const {done, value} = await reader.read();
 
-            isProcessing = true;
-            sendButton.disabled = true;
-            sendButton.textContent = 'Sending...';
-
-
-            addMessage('user', query);
-            userInput.value = '';
-
-            currentResponse = {
-                text: '',
-                isTyping: false,
-                entryElement: null,
-                contentElement: null
-            };
-
-            showThinking("Processing your question...");
-            updateStatus("Connecting to agent...");
-
-            try {
-                const response = await fetch('/agent/stream/realtime', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `query=${encodeURIComponent(query)}`
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                if (done) {
+                    break;
                 }
+                const chunk = decoder.decode(value, {stream: true});
+                const lines = chunk.split('\n');
 
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-
-                function readStream() {
-                    return reader.read().then(({ done, value }) => {
-                        if (done) {
-                            hideThinking();
-                            isProcessing = false;
-                            sendButton.disabled = false;
-                            sendButton.textContent = 'Send';
-                            updateStatus("Ready to assist you");
-                            return;
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.substring(6));
+                            handleStreamData(data);
+                        } catch (e) {
+                            console.error('Error parsing stream data:', e, line);
                         }
-
-                        const chunk = decoder.decode(value);
-                        const lines = chunk.split('\n');
-
-                        lines.forEach(line => {
-                            if (line.startsWith('data: ')) {
-                                try {
-                                    const data = JSON.parse(line.substring(6));
-                                    handleStreamData(data);
-                                } catch (e) {
-                                    console.error('Error parsing chunk:', e, line);
-                                }
-                            }
-                        });
-
-                        return readStream();
-                    });
-                }
-
-                return readStream();
-
-            } catch (error) {
-                hideThinking();
-                console.error('Error:', error);
-                addMessage('system', `Error: ${error.message}`);
-                updateStatus("Error occurred - Ready to try again");
-
-                isProcessing = false;
-                sendButton.disabled = false;
-                sendButton.textContent = 'Send';
-            }
-        }
-
-        function handleStreamData(data) {
-            if (data.type === 'start') {
-                showThinking("Agent starting...");
-                updateStatus("Agent is processing your query");
-
-            } else if (data.type === 'reasoning') {
-                showThinking(data.content);
-                let list_message = messages.children
-                let last_child = list_message[list_message.length -1]
-                if(last_child.className === 'message reasoning'){
-                    if(last_child.children[1].innerHTML === 'Thinking ....'){
-                        return 
                     }
                 }
-                addMessage('reasoning', data.content, new Date(data.timestamp * 1000).toLocaleTimeString());
-
-            } else if (data.type === 'tool_call') {
-                showThinking("Using tools...");
-                updateStatus("Agent is using tools");
-
-                const { messageDiv } = addMessage('system', data.content, new Date(data.timestamp * 1000).toLocaleTimeString());
-                const toolDiv = document.createElement('div');
-                toolDiv.className = 'tool-info';
-                toolDiv.innerHTML = `<div class="tool-call">🔧 ${data.content}</div>`;
-                messageDiv.appendChild(toolDiv);
-
-            } else if (data.type === 'thinking' && data.content && data.content.trim()) {
-                hideThinking();
-                updateStatus("Agent is responding...");
-
-
-                currentResponse.text += data.content;
-
-                if (!currentResponse.entryElement) {
-                    const { messageDiv, contentDiv } = addMessage('assistant', '', new Date(data.timestamp * 1000).toLocaleTimeString());
-                    currentResponse.entryElement = messageDiv;
-                    currentResponse.contentElement = contentDiv;
-                }
-                currentResponse.contentElement.textContent = currentResponse.text
-
-            } else if (data.type === 'final') {
-                hideThinking();
-                updateStatus("Response completed");
-
-                // Ensure typing is finished
-                if (currentResponse.contentElement && currentResponse.text) {
-                    currentResponse.contentElement.textContent = currentResponse.text;
-                    currentResponse.entryElement.classList.remove('typing-entry');
-                }
-
-            } else if (data.type === 'error') {
-                hideThinking();
-                addMessage('system', `Error: ${data.content}`);
-                updateStatus("Error occurred");
             }
 
-            // Auto-scroll
-            messages.scrollTop = messages.scrollHeight;
+        } catch (error) {
+            console.error('Error:', error);
+            addMessage('system', `Error: ${error.message}`);
+        } finally {
+            isStreaming = false;
+            userInput.disabled = false;
+            sendButton.disabled = false;
+            sendButton.textContent = 'Send';
+            userInput.focus();
+        }
+    }
+
+    function handleStreamData(data) {
+        if (data.type === 'start') {
+            showThinking("Agent starting...");
+
+        } else if (data.type === 'reasoning') {
+            showThinking(data.content);
+            let list_message = messages.children
+            let last_child = list_message[list_message.length - 1]
+            if (last_child.className === 'message reasoning') {
+                if (last_child.children[1].innerHTML === 'Thinking ....') {
+                    return
+                }
+            }
+            addMessage('reasoning', data.content);
+
+        } else if (data.type === 'tool_call') {
+            showThinking("Using tools...");
+
+            const {messageDiv} = addMessage('system', data.content);
+            const toolDiv = document.createElement('div');
+            toolDiv.className = 'tool-info';
+            toolDiv.innerHTML = `<div class="tool-call">🔧 ${data.content}</div>`;
+            messageDiv.appendChild(toolDiv);
+
+        } else if (data.type === 'thinking' && data.content && data.content.trim()) {
+            hideThinking();
+
+            currentResponse.text += data.content;
+
+            if (!currentResponse.entryElement) {
+                const {messageDiv, contentDiv} = addMessage('assistant', '');
+                currentResponse.entryElement = messageDiv;
+                currentResponse.contentElement = contentDiv;
+            }
+            currentResponse.contentElement.textContent = currentResponse.text
+
+        } else if (data.type === 'final') {
+            hideThinking();
+
+            if (currentResponse.contentElement && currentResponse.text) {
+                currentResponse.contentElement.textContent = currentResponse.text;
+                currentResponse.entryElement.classList.remove('typing-entry');
+            }
+
+        } else if (data.type === 'error') {
+            hideThinking();
+            addMessage('system', `Error: ${data.content}`);
         }
 
-        // Auto-focus input field
-        userInput.focus();
-    </script>
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    userInput.focus();
+</script>
 </body>
 </html>

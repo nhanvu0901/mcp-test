@@ -33,4 +33,5 @@ openai>=1.75.0
 pymongo
 pymupdf4llm
 requests>=2.31.0
-sseclient-py>=1.7.2 
+sseclient-py>=1.7.2
+mem0ai

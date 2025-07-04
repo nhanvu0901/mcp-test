@@ -8,7 +8,8 @@ from qdrant_client import QdrantClient
 from langchain_openai import AzureOpenAIEmbeddings
 from services.document_processor import DocumentProcessor
 from pymongo import MongoClient
-
+project_root = Path(__file__).parent.parent
+os.chdir(project_root)
 # Initialize MCP server
 mcp = FastMCP(
     "DocumentService",
